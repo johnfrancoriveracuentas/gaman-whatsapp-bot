@@ -145,6 +145,7 @@ async function handleImageSticker(sock, from, msg) {
     }
 }
 
+let sock = null;
 let currentQR = null;
 
 async function startBot() {
