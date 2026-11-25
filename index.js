@@ -6,7 +6,8 @@ const {
     fetchLatestBaileysVersion,
     downloadMediaMessage
 } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+const qrcodeTerm = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const pino = require('pino');
 const express = require('express');
 const sharp = require('sharp');
@@ -144,7 +145,7 @@ async function handleImageSticker(sock, from, msg) {
     }
 }
 
-let sock = null;
+let currentQR = null;
 
 async function startBot() {
     if (sock) {
@@ -168,8 +169,9 @@ async function startBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
+            currentQR = qr;
             console.log('\n=== Escanea este QR con WhatsApp ===\n');
-            qrcode.generate(qr, { small: true });
+            qrcodeTerm.generate(qr, { small: true });
             console.log('\nWhatsApp > Dispositivos vinculados > Vincular dispositivo\n');
         }
         if (connection === 'close') {
@@ -184,6 +186,7 @@ async function startBot() {
                 sock = null;
             }
         } else if (connection === 'open') {
+            currentQR = null;
             console.log('✅ Bot de WhatsApp (Baileys) listo y conectado.');
         }
     });
@@ -262,7 +265,17 @@ async function startBot() {
 // Health endpoint para hosting (Render/Koyeb/etc.)
 const app = express();
 app.get('/', (req, res) => res.send('Gaman WhatsApp Bot OK 🟢'));
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+app.get('/qr', async (req, res) => {
+    if (!currentQR) {
+        return res.status(404).send('No hay QR disponible. El bot ya está conectado o reiniciando.');
+    }
+    try {
+        const img = await QRCode.toBuffer(currentQR, { type: 'png', width: 300 });
+        res.type('png').send(img);
+    } catch (e) {
+        res.status(500).send('Error generando QR');
+    }
+});
 app.listen(PORT, () => console.log(`🌐 Health server en puerto ${PORT}`));
 
 startBot().catch((err) => {
